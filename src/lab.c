@@ -23,28 +23,45 @@
         raise(SIGKILL);          \
     } while (0)
 
-/**
- * @brief Convert bytes to the correct K value
- *
- * @param bytes the number of bytes
- * @return size_t the K value that will fit bytes
- */
 size_t btok(size_t bytes)
 {
-    //DO NOT use math.pow
+    // Edge case
+    if(bytes == 0)
+        return 0;
+
+    size_t k = SMALLEST_K; // Guarantee enough space for the header
+
+    // Count the number of bits needed to represent bytes
+    while(bytes > 0)
+    {
+        bytes >>= 1; // Divide by 2
+        k++;
+    }
+
+    return k;
 }
 
-struct avail *buddy_calc(struct buddy_pool *pool, struct avail *buddy)
+struct avail *buddy_calc(struct buddy_pool *pool, struct avail *block)
 {
-
+     // kval equals the number of right 0s in the address, so shift a 1 to the left k-many times and then XOR to get the buddy's address
+    uintptr_t buddy_addr = (uintptr_t)block ^ (UINT64_C(1) << block->kval);
+    return (struct avail *)buddy_addr;
 }
 
 void *buddy_malloc(struct buddy_pool *pool, size_t size)
 {
-
     //get the kval for the requested size with enough room for the tag and kval fields
+    size_t k = btok(size);
+    size_t working_k = k;
 
     //R1 Find a block
+    while(working_k <= pool->kval_m)
+    {
+        if(pool->avail[k].tag == BLOCK_AVAIL)
+        {
+            
+        }
+    }
 
     //There was not enough memory to satisfy the request thus we need to set error and return NULL
 
