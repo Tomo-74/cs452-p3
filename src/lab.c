@@ -43,8 +43,16 @@ size_t btok(size_t bytes)
 
 struct avail *buddy_calc(struct buddy_pool *pool, struct avail *block)
 {
-     // kval equals the number of right 0s in the address, so shift a 1 to the left k-many times and then XOR to get the buddy's address
+    // kval equals the number of right zeros in this block's address, so shift a 1 into the correct position and XOR to get the buddy's address
     uintptr_t buddy_addr = (uintptr_t)block ^ (UINT64_C(1) << block->kval);
+
+    // Ensure the buddy address is within the pool's memory range
+    uintptr_t pool_start = (uintptr_t)pool->base;
+    uintptr_t pool_end = pool_start + pool->numbytes;
+    
+    if(buddy_addr < pool_start || buddy_addr >= pool_end)
+        return NULL;
+
     return (struct avail *)buddy_addr;
 }
 
@@ -52,25 +60,42 @@ void *buddy_malloc(struct buddy_pool *pool, size_t size)
 {
     //get the kval for the requested size with enough room for the tag and kval fields
     size_t k = btok(size);
-    size_t working_k = k;
 
     //R1 Find a block
-    while(working_k <= pool->kval_m)
+    size_t j = k;
+    while(j <= pool->kval_m) 
     {
-        if(pool->avail[k].tag == BLOCK_AVAIL)
-        {
-            
-        }
+        if(pool->avail[j].next != &pool->avail[j])
+            break;
+        j++;
     }
 
     //There was not enough memory to satisfy the request thus we need to set error and return NULL
+    if(j > pool->kval_m) 
+    {
+        errno = ENOMEM;
+        return NULL;
+    }
 
     //R2 Remove from list;
+    struct avail *L = pool->avail[j].next;
+    struct avail *P = L->next;
+    pool->avail[j].next = P;
+    P->prev = &pool->avail[j];
+    L->tag = BLOCK_RESERVED;
 
-    //R3 Split required?
-
-    //R4 Split the block
-
+    //R3 and R4 Split the block if required
+    while(j != k)
+    {
+        j--;
+        P = L + (1 << j); // P = L + 2^j
+        P->tag = BLOCK_AVAIL;
+        P->kval = j;
+        P->next = P->prev = &pool->avail[j];
+        pool->avail[j].next = pool->avail[j].prev = P;
+    }
+    
+    return (void*) L + 8; // Skip the header when passing the block back to the user
 }
 
 void buddy_free(struct buddy_pool *pool, void *ptr)
