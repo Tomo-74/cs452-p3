@@ -95,12 +95,18 @@ void *buddy_malloc(struct buddy_pool *pool, size_t size)
         pool->avail[j].next = pool->avail[j].prev = P;
     }
     
-    return (void*) L + 8; // Skip the header when passing the block back to the user
+    return (void*) (L + HEADER_SIZE); // Skip the header when passing the block back to the user
 }
 
 void buddy_free(struct buddy_pool *pool, void *ptr)
 {
+    // Do nothing if void pointer
+    if(!ptr) return;
 
+    struct avail *L = ptr - HEADER_SIZE; // Retrieve header
+
+    // S1 Is buddy available?
+    struct avail *P = buddy_calc(pool, L);
 }
 
 /**
