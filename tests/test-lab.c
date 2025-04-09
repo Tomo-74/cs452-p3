@@ -149,11 +149,12 @@ void test_buddy_malloc_multiple_small(void)
   assert(mem2 != NULL);
   assert(mem3 != NULL);
 
-  check_buddy_pool_full(&pool);
-
+  
   buddy_free(&pool, mem1);
   buddy_free(&pool, mem2);
   buddy_free(&pool, mem3);
+  
+  check_buddy_pool_full(&pool);
 
   buddy_destroy(&pool);
 }
@@ -176,11 +177,12 @@ void test_buddy_malloc_varying_sizes(void)
   assert(mem2 != NULL);
   assert(mem3 != NULL);
 
-  check_buddy_pool_full(&pool);
-
+  
   buddy_free(&pool, mem2);
   buddy_free(&pool, mem1);
   buddy_free(&pool, mem3);
+  
+  check_buddy_pool_full(&pool);
 
   buddy_destroy(&pool);
 }

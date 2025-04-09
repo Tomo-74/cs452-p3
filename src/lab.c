@@ -26,9 +26,9 @@
 size_t btok(size_t bytes)
 {
     // Edge case
-    if(!bytes) return -1;
+    if(!bytes) return 0;
 
-    size_t k = SMALLEST_K; // Guarantee enough space for the header
+    size_t k = 0; // Guarantee enough space for the header
 
     // Count the number of bits needed to represent bytes
     while(bytes > 0)
@@ -50,15 +50,15 @@ struct avail *buddy_calc(struct buddy_pool *pool, struct avail *block)
 void *buddy_malloc(struct buddy_pool *pool, size_t size)
 {
     // Input validation
-    if(!pool) return NULL;
-    if(size > pool->numbytes)
+    if(!pool || size > pool->numbytes || size <= 0)
     {
         errno = ENOMEM;
         return NULL;
     }
 
     // Retrieve the kval for the requested size with enough room for the header
-    size_t k = btok(size);
+    size_t k = btok(size + HEADER_SIZE);
+    if(k < SMALLEST_K) k = SMALLEST_K;
 
     //R1 Find a block
     size_t j = k;
@@ -84,10 +84,10 @@ void *buddy_malloc(struct buddy_pool *pool, size_t size)
     L->tag = BLOCK_RESERVED;
 
     //R3 and R4 Split the block if required
-    while(j != k)
+    while(j > k)
     {
         j--;
-        P = (struct avail *) ((uintptr_t)L + (UINT64_C(1) << j));   // L + 2**j
+        P = (struct avail *) ((size_t)L + (UINT64_C(1) << j));   // L + 2**j
         P->tag = BLOCK_AVAIL;
         P->kval = j;
         P->next = P->prev = &pool->avail[j];
@@ -95,7 +95,7 @@ void *buddy_malloc(struct buddy_pool *pool, size_t size)
     }
     L->kval = j;
 
-    return (void *) (L + HEADER_SIZE); // Skip the header when passing the block back to the user
+    return (void *) ((char *)L + HEADER_SIZE); // Skip the header when passing the block back to the user
 }
 
 void buddy_free(struct buddy_pool *pool, void *ptr)
@@ -134,20 +134,6 @@ void buddy_free(struct buddy_pool *pool, void *ptr)
     pool->avail[k].next = L;
 }
 
-// /**
-//  * @brief This is a simple version of realloc.
-//  *
-//  * @param poolThe memory pool
-//  * @param ptr  The user memory
-//  * @param size the new size requested
-//  * @return void* pointer to the new user memory
-//  */
-// void *buddy_realloc(struct buddy_pool *pool, void *ptr, size_t size)
-// {
-//     //Required for Grad Students
-//     //Optional for Undergrad Students
-// }
-
 void buddy_init(struct buddy_pool *pool, size_t size)
 {
     size_t kval = 0;
@@ -170,11 +156,7 @@ void buddy_init(struct buddy_pool *pool, size_t size)
         NULL,                               /*addr to map to*/
         pool->numbytes,                     /*length*/
         PROT_READ | PROT_WRITE,             /*prot*/
-        #ifdef __APPLE__
-                MAP_PRIVATE | MAP_ANON,            /*flags*/
-        #else
-                MAP_PRIVATE | MAP_ANONYMOUS,       /*flags*/
-        #endif
+        MAP_PRIVATE | MAP_ANONYMOUS,       /*flags*/
         -1,                                 /*fd -1 when using MAP_ANONYMOUS*/
         0                                   /* offset 0 when using MAP_ANONYMOUS*/
     );

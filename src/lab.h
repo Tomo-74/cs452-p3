@@ -51,11 +51,7 @@ extern "C"
     struct avail *prev;         /*prev memory block*/
   };
 
-  /**
-   * The size of the block header, which contains a tag and kval, both of which are
-   * unsigned short ints (2 + 2 = 4 bytes). This will be architecture-dependent.
-   */
-#define HEADER_SIZE sizeof(struct avail)
+  #define HEADER_SIZE sizeof(struct avail)
 
   /**
    * The buddy memory pool.
