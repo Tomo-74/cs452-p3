@@ -18,8 +18,6 @@ void tearDown(void) {
   // clean stuff up here
 }
 
-
-
 /**
  * Check the pool to ensure it is full.
  */
@@ -133,6 +131,76 @@ void test_buddy_init(void)
     }
 }
 
+/**
+ * Test allocating multiple small blocks to ensure proper splitting and merging.
+ */
+void test_buddy_malloc_multiple_small(void)
+{
+  fprintf(stderr, "->Testing multiple small allocations\n");
+  struct buddy_pool pool;
+  size_t size = UINT64_C(1) << DEFAULT_K;
+  buddy_init(&pool, size);
+
+  void *mem1 = buddy_malloc(&pool, 16);
+  void *mem2 = buddy_malloc(&pool, 32);
+  void *mem3 = buddy_malloc(&pool, 64);
+
+  assert(mem1 != NULL);
+  assert(mem2 != NULL);
+  assert(mem3 != NULL);
+
+  check_buddy_pool_full(&pool);
+
+  buddy_free(&pool, mem1);
+  buddy_free(&pool, mem2);
+  buddy_free(&pool, mem3);
+
+  buddy_destroy(&pool);
+}
+
+/**
+ * Test allocating and freeing blocks of varying sizes to ensure proper behavior.
+ */
+void test_buddy_malloc_varying_sizes(void)
+{
+  fprintf(stderr, "->Testing varying size allocations\n");
+  struct buddy_pool pool;
+  size_t size = UINT64_C(1) << DEFAULT_K;
+  buddy_init(&pool, size);
+
+  void *mem1 = buddy_malloc(&pool, 128);
+  void *mem2 = buddy_malloc(&pool, 256);
+  void *mem3 = buddy_malloc(&pool, 512);
+
+  assert(mem1 != NULL);
+  assert(mem2 != NULL);
+  assert(mem3 != NULL);
+
+  check_buddy_pool_full(&pool);
+
+  buddy_free(&pool, mem2);
+  buddy_free(&pool, mem1);
+  buddy_free(&pool, mem3);
+
+  buddy_destroy(&pool);
+}
+
+/**
+ * Test allocating a block larger than the pool size to ensure failure.
+ */
+void test_buddy_malloc_too_large(void)
+{
+  fprintf(stderr, "->Testing allocation larger than pool size\n");
+  struct buddy_pool pool;
+  size_t size = UINT64_C(1) << DEFAULT_K;
+  buddy_init(&pool, size);
+
+  void *mem = buddy_malloc(&pool, size + 1);
+  assert(mem == NULL);
+  assert(errno == ENOMEM);
+
+  buddy_destroy(&pool);
+}
 
 int main(void) {
   time_t t;
@@ -142,8 +210,13 @@ int main(void) {
   printf("Running memory tests.\n");
 
   UNITY_BEGIN();
+
   RUN_TEST(test_buddy_init);
   RUN_TEST(test_buddy_malloc_one_byte);
   RUN_TEST(test_buddy_malloc_one_large);
-return UNITY_END();
+  RUN_TEST(test_buddy_malloc_multiple_small);
+  RUN_TEST(test_buddy_malloc_varying_sizes);
+  RUN_TEST(test_buddy_malloc_too_large);
+
+  return UNITY_END();
 }

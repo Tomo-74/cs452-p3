@@ -43,22 +43,20 @@ size_t btok(size_t bytes)
 
 struct avail *buddy_calc(struct buddy_pool *pool, struct avail *block)
 {
-    // kval equals the number of right zeros in this block's address, so shift a 1 into the correct position and XOR to get the buddy's address
-    uintptr_t buddy_addr = (uintptr_t)block ^ (UINT64_C(1) << block->kval);
-
-    // Ensure the buddy address is within the pool's memory range
-    uintptr_t pool_start = (uintptr_t)pool->base;
-    uintptr_t pool_end = pool_start + pool->numbytes;
-    
-    if(buddy_addr < pool_start || buddy_addr >= pool_end)
-        return NULL;
-
-    return (struct avail *)buddy_addr;
+    uintptr_t addr = (uintptr_t)block - (uintptr_t)pool->base;  // Get relative address of block
+    uintptr_t mask = UINT64_C(1) << block->kval;                // Mask for calculating buddy address
+    return pool->base + (addr ^ mask);                          // XOR to get buddy address
 }
 
 void *buddy_malloc(struct buddy_pool *pool, size_t size)
 {
-    //get the kval for the requested size with enough room for the tag and kval fields
+    if(size > pool->numbytes)
+    {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    // Retrieve the kval for the requested size with enough room for the header
     size_t k = btok(size);
 
     //R1 Find a block
@@ -88,14 +86,14 @@ void *buddy_malloc(struct buddy_pool *pool, size_t size)
     while(j != k)
     {
         j--;
-        P = L + (1 << j); // P = L + 2^j
+        P = L + (1 << j); // L + 2**j
         P->tag = BLOCK_AVAIL;
         P->kval = j;
         P->next = P->prev = &pool->avail[j];
         pool->avail[j].next = pool->avail[j].prev = P;
     }
     
-    return (void*) (L + HEADER_SIZE); // Skip the header when passing the block back to the user
+    return (void *) (L + HEADER_SIZE); // Skip the header when passing the block back to the user
 }
 
 void buddy_free(struct buddy_pool *pool, void *ptr)
@@ -103,10 +101,35 @@ void buddy_free(struct buddy_pool *pool, void *ptr)
     // Do nothing if void pointer
     if(!ptr) return;
 
-    struct avail *L = ptr - HEADER_SIZE; // Retrieve header
+    struct avail *L = (struct avail*)(ptr - HEADER_SIZE); // Retrieve header
+    struct avail *P; // Buddy of L
+    
+    unsigned short int k = L->kval;
+    size_t m = pool->kval_m;
 
-    // S1 Is buddy available?
-    struct avail *P = buddy_calc(pool, L);
+    while(true)
+    {
+        // S1 Is buddy available?
+        P = buddy_calc(pool, L);
+
+        if( (k == m || P->tag == BLOCK_RESERVED) || (P->tag == BLOCK_AVAIL && P->kval != k) )
+            break;
+
+        // S2 Combine with buddy
+        P->prev->next = P->next;
+        P->next->prev = P->prev;
+        P->kval++;
+        if(P < L) L = P;
+    }
+
+    // S3 Put block L on the avail list
+    L->tag = BLOCK_AVAIL;
+    P = pool->avail[P->kval].next;
+    L->next = P;
+    P->prev = L;
+    L->kval = P->kval;
+    L->prev = &pool->avail[k];
+    pool->avail[k].next = L;
 }
 
 /**
@@ -145,7 +168,11 @@ void buddy_init(struct buddy_pool *pool, size_t size)
         NULL,                               /*addr to map to*/
         pool->numbytes,                     /*length*/
         PROT_READ | PROT_WRITE,             /*prot*/
-        MAP_PRIVATE | MAP_ANONYMOUS,        /*flags*/
+        #ifdef __APPLE__
+                MAP_PRIVATE | MAP_ANON,            /*flags*/
+        #else
+                MAP_PRIVATE | MAP_ANONYMOUS,       /*flags*/
+        #endif
         -1,                                 /*fd -1 when using MAP_ANONYMOUS*/
         0                                   /* offset 0 when using MAP_ANONYMOUS*/
     );

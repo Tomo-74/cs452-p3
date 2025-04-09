@@ -12,12 +12,6 @@ extern "C"
 #endif
 
   /**
-   * The size of the block header, which contains a tag and kval, both of which are
-   * unsigned short ints (2 + 2 = 4 bytes). This will be architecture-dependent.
-   */
-#define HEADER_SIZE 4
-
-  /**
    * The default amount of memory that this memory manger will manage unless
    * explicitly set with buddy_init. The number of bytes is calculated as 2^DEFAULT_K
    */
@@ -56,6 +50,12 @@ extern "C"
     struct avail *next;         /*next memory block*/
     struct avail *prev;         /*prev memory block*/
   };
+
+  /**
+   * The size of the block header, which contains a tag and kval, both of which are
+   * unsigned short ints (2 + 2 = 4 bytes). This will be architecture-dependent.
+   */
+#define HEADER_SIZE sizeof(struct avail)
 
   /**
    * The buddy memory pool.
