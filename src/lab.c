@@ -26,8 +26,7 @@
 size_t btok(size_t bytes)
 {
     // Edge case
-    if(bytes == 0)
-        return 0;
+    if(!bytes) return -1;
 
     size_t k = SMALLEST_K; // Guarantee enough space for the header
 
@@ -45,11 +44,13 @@ struct avail *buddy_calc(struct buddy_pool *pool, struct avail *block)
 {
     uintptr_t addr = (uintptr_t)block - (uintptr_t)pool->base;  // Get relative address of block
     uintptr_t mask = UINT64_C(1) << block->kval;                // Mask for calculating buddy address
-    return pool->base + (addr ^ mask);                          // XOR to get buddy address
+    return (struct avail *) (pool->base + (addr ^ mask));       // XOR to get buddy address
 }
 
 void *buddy_malloc(struct buddy_pool *pool, size_t size)
 {
+    // Input validation
+    if(!pool) return NULL;
     if(size > pool->numbytes)
     {
         errno = ENOMEM;
@@ -86,25 +87,26 @@ void *buddy_malloc(struct buddy_pool *pool, size_t size)
     while(j != k)
     {
         j--;
-        P = L + (1 << j); // L + 2**j
+        P = (struct avail *) ((uintptr_t)L + (UINT64_C(1) << j));   // L + 2**j
         P->tag = BLOCK_AVAIL;
         P->kval = j;
         P->next = P->prev = &pool->avail[j];
         pool->avail[j].next = pool->avail[j].prev = P;
     }
-    
+    L->kval = j;
+
     return (void *) (L + HEADER_SIZE); // Skip the header when passing the block back to the user
 }
 
 void buddy_free(struct buddy_pool *pool, void *ptr)
 {
     // Do nothing if void pointer
-    if(!ptr) return;
+    if(!pool || !ptr) return;
 
-    struct avail *L = (struct avail*)(ptr - HEADER_SIZE); // Retrieve header
+    struct avail *L = (struct avail *)(ptr - HEADER_SIZE); // Retrieve header
     struct avail *P; // Buddy of L
     
-    unsigned short int k = L->kval;
+    size_t k = L->kval;
     size_t m = pool->kval_m;
 
     while(true)
@@ -124,27 +126,27 @@ void buddy_free(struct buddy_pool *pool, void *ptr)
 
     // S3 Put block L on the avail list
     L->tag = BLOCK_AVAIL;
-    P = pool->avail[P->kval].next;
+    P = pool->avail[k].next;
     L->next = P;
     P->prev = L;
-    L->kval = P->kval;
+    L->kval = k;
     L->prev = &pool->avail[k];
     pool->avail[k].next = L;
 }
 
-/**
- * @brief This is a simple version of realloc.
- *
- * @param poolThe memory pool
- * @param ptr  The user memory
- * @param size the new size requested
- * @return void* pointer to the new user memory
- */
-void *buddy_realloc(struct buddy_pool *pool, void *ptr, size_t size)
-{
-    //Required for Grad Students
-    //Optional for Undergrad Students
-}
+// /**
+//  * @brief This is a simple version of realloc.
+//  *
+//  * @param poolThe memory pool
+//  * @param ptr  The user memory
+//  * @param size the new size requested
+//  * @return void* pointer to the new user memory
+//  */
+// void *buddy_realloc(struct buddy_pool *pool, void *ptr, size_t size)
+// {
+//     //Required for Grad Students
+//     //Optional for Undergrad Students
+// }
 
 void buddy_init(struct buddy_pool *pool, size_t size)
 {
@@ -212,24 +214,24 @@ void buddy_destroy(struct buddy_pool *pool)
 
 #define UNUSED(x) (void)x
 
-/**
- * This function can be useful to visualize the bits in a block. This can
- * help when figuring out the buddy_calc function!
- */
-static void printb(unsigned long int b)
-{
-     size_t bits = sizeof(b) * 8;
-     unsigned long int curr = UINT64_C(1) << (bits - 1);
-     for (size_t i = 0; i < bits; i++)
-     {
-          if (b & curr)
-          {
-               printf("1");
-          }
-          else
-          {
-               printf("0");
-          }
-          curr >>= 1L;
-     }
-}
+// /**
+//  * This function can be useful to visualize the bits in a block. This can
+//  * help when figuring out the buddy_calc function!
+//  */
+// static void printb(unsigned long int b)
+// {
+//      size_t bits = sizeof(b) * 8;
+//      unsigned long int curr = UINT64_C(1) << (bits - 1);
+//      for (size_t i = 0; i < bits; i++)
+//      {
+//           if (b & curr)
+//           {
+//                printf("1");
+//           }
+//           else
+//           {
+//                printf("0");
+//           }
+//           curr >>= 1L;
+//      }
+// }
